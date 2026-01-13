@@ -3,7 +3,13 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/index.js",
-  "repository": "https://github.com/Privacy-Cash/privacy-cash-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmitriy-faraway/privacy-cash-sdk.git"
+  },
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": "./dist/index.js",
     "./utils": "./dist/exportUtils.js"
