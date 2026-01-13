@@ -76,11 +76,11 @@ type DepositParams = {
     encryptionService: EncryptionService,
     keyBasePath: string,
     lightWasm: hasher.LightWasm,
-    payerKey?: PublicKey,
     referrer?: string,
-    transactionSigner: (tx: VersionedTransaction) => Promise<VersionedTransaction>,
+    signer?: PublicKey,
+    transactionSigner: (tx: VersionedTransaction) => Promise<VersionedTransaction>
 }
-export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, payerKey = publicKey, connection, base_units, amount, encryptionService, transactionSigner, referrer, mintAddress }: DepositParams) {
+export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, connection, base_units, amount, encryptionService, transactionSigner, referrer, mintAddress, signer }: DepositParams) {
     if (typeof mintAddress == 'string') {
         mintAddress = new PublicKey(mintAddress)
     }
@@ -97,6 +97,9 @@ export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, p
         throw new Error('You must input at least one of "base_units" or "amount"')
     }
 
+    if (!signer) {
+        signer = publicKey
+    }
 
     // let mintInfo = await getMint(connection, token.pubkey)
     // let units_per_token = 10 ** mintInfo.decimals
@@ -114,7 +117,7 @@ export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, p
     );
     let signerTokenAccount = getAssociatedTokenAddressSync(
         token.pubkey,
-        publicKey
+        signer
     );
 
     // Derive tree account PDA with mint address for SPL
@@ -131,7 +134,7 @@ export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, p
     // const base_units = amount_in_sol * units_per_token
     const fee_base_units = 0
     logger.debug('Encryption key generated from user keypair');
-    logger.debug(`User wallet: ${publicKey.toString()}`);
+    logger.debug(`User wallet: ${signer.toString()}`);
     logger.debug(`Deposit amount: ${base_units} base_units (${base_units / token.units_per_token}  ${token.name.toUpperCase()})`);
     logger.debug(`Calculated fee: ${fee_base_units} base_units (${fee_base_units / token.units_per_token}  ${token.name.toUpperCase()})`);
 
@@ -147,7 +150,7 @@ export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, p
     }
 
     // Check SOL balance
-    const solBalance = await connection.getBalance(publicKey);
+    const solBalance = await connection.getBalance(signer);
     logger.debug(`SOL Wallet balance: ${solBalance / 1e9} SOL`);
 
     if (solBalance / 1e9 < 0.002) {
@@ -441,7 +444,7 @@ export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, p
 
             { pubkey: globalConfigAccount, isSigner: false, isWritable: false },
             // signer
-            { pubkey: publicKey, isSigner: true, isWritable: true },
+            { pubkey: signer, isSigner: true, isWritable: true },
             // SPL token mint
             { pubkey: token.pubkey, isSigner: false, isWritable: false },
             // signer's token account
@@ -476,7 +479,7 @@ export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, p
     const recentBlockhash = await connection.getLatestBlockhash();
 
     const messageV0 = new TransactionMessage({
-        payerKey,
+        payerKey: signer, // User pays for their own deposit
         recentBlockhash: recentBlockhash.blockhash,
         instructions: [modifyComputeUnits, depositInstruction],
     }).compileToV0Message([lookupTableAccount.value]);
@@ -498,7 +501,7 @@ export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, p
     logger.info('submitting transaction to relayer...')
     const signature = await relayDepositToIndexer({
         mintAddress: token.pubkey.toString(),
-        publicKey,
+        publicKey: signer,
         signedTransaction: serializedTransaction,
         referrer
     });

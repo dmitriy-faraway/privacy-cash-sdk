@@ -1,5 +1,5 @@
 ## Privacy Cash Extended
-Based on privacycash@1.1.8
+Based on privacycash@1.1.9
 
 ## Privacy Cash SDK
 This is the SDK for Privacy Cash. It has been audited by Zigtur (https://x.com/zigtur).
