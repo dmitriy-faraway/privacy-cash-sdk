@@ -56,9 +56,10 @@ type WithdrawParams = {
     mintAddress: PublicKey | string,
     storage: Storage,
     referrer?: string,
+    utxosSplOffset?: number
 }
 
-export async function withdrawSPL({ recipient, lightWasm, storage, publicKey, connection, base_units, amount, encryptionService, keyBasePath, mintAddress, referrer }: WithdrawParams) {
+export async function withdrawSPL({ recipient, lightWasm, storage, publicKey, connection, base_units, amount, encryptionService, keyBasePath, mintAddress, referrer, utxosSplOffset }: WithdrawParams) {
     if (typeof mintAddress == 'string') {
         mintAddress = new PublicKey(mintAddress)
     }
@@ -138,7 +139,7 @@ export async function withdrawSPL({ recipient, lightWasm, storage, publicKey, co
 
     // Fetch existing UTXOs for this user
     logger.debug('\nFetching existing UTXOs...');
-    const mintUtxos = await getUtxosSPL({ connection, publicKey, encryptionService, storage, mintAddress });
+    const mintUtxos = await getUtxosSPL({ connection, publicKey, encryptionService, storage, mintAddress, offset: utxosSplOffset });
 
     logger.debug(`Found ${mintUtxos.length} total UTXOs for ${token.name}`);
 

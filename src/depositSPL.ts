@@ -78,9 +78,10 @@ type DepositParams = {
     lightWasm: hasher.LightWasm,
     referrer?: string,
     signer?: PublicKey,
-    transactionSigner: (tx: VersionedTransaction) => Promise<VersionedTransaction>
+    transactionSigner: (tx: VersionedTransaction) => Promise<VersionedTransaction>,
+    utxosSplOffset?: number
 }
-export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, connection, base_units, amount, encryptionService, transactionSigner, referrer, mintAddress, signer }: DepositParams) {
+export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, connection, base_units, amount, encryptionService, transactionSigner, referrer, mintAddress, signer, utxosSplOffset }: DepositParams) {
     if (typeof mintAddress == 'string') {
         mintAddress = new PublicKey(mintAddress)
     }
@@ -178,7 +179,7 @@ export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, c
 
     // Fetch existing UTXOs for this user
     logger.debug('\nFetching existing UTXOs...');
-    const mintUtxos = await getUtxosSPL({ connection, publicKey, encryptionService, storage, mintAddress });
+    const mintUtxos = await getUtxosSPL({ connection, publicKey, encryptionService, storage, mintAddress, offset: utxosSplOffset });
 
     // Calculate output amounts and external amount based on scenario
     let extAmount: number;

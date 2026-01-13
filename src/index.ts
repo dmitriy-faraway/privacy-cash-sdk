@@ -24,15 +24,21 @@ export class PrivacyCash {
     private keypair: Keypair | null = null
     private isRuning?: boolean = false
     private status: string = ''
+    private utxosOffset?: number
+    private utxosSplOffset?: number
     private getConnection: () => Promise<Connection>;
-    constructor({ RPC_url, owner, signature, enableDebug, getConnection, publicKey }: {
+    constructor({ RPC_url, owner, signature, enableDebug, getConnection, publicKey, utxosOffset, utxosSplOffset }: {
         RPC_url?: string,
         publicKey: PublicKey;
         getConnection?: () => Promise<Connection>,
         owner?: string | number[] | Uint8Array | Keypair,
         signature?: Uint8Array,
-        enableDebug?: boolean
+        enableDebug?: boolean,
+        utxosOffset?: number,
+        utxosSplOffset?: number,
     }) {
+        this.utxosOffset = utxosOffset;
+        this.utxosSplOffset = utxosSplOffset;
         this.publicKey = publicKey;
         if (!owner && !signature) {
             throw new Error('param "owner" or "signature" is required')
@@ -133,6 +139,7 @@ export class PrivacyCash {
             keyBasePath,
             storage,
             signer,
+            utxosOffset: this.utxosOffset
         })
         this.isRuning = false
         return res
@@ -164,7 +171,8 @@ export class PrivacyCash {
             transactionSigner,
             keyBasePath,
             storage,
-            signer
+            signer,
+            utxosSplOffset: this.utxosSplOffset
         })
         this.isRuning = false
         return res
@@ -194,7 +202,8 @@ export class PrivacyCash {
             recipient,
             keyBasePath,
             storage,
-            referrer
+            referrer,
+            utxosOffset: this.utxosOffset
         })
         logger.debug(`Withdraw successful. Recipient ${recipient} received ${res.amount_in_lamports / LAMPORTS_PER_SOL} SOL, with ${res.fee_in_lamports / LAMPORTS_PER_SOL} SOL relayers fees`)
         this.isRuning = false
@@ -240,7 +249,7 @@ export class PrivacyCash {
         logger.info('getting private balance')
         this.isRuning = true
         const connection = await this.getConnection();
-        let utxos = await getUtxos({ publicKey: this.publicKey, connection: connection, encryptionService: this.encryptionService, storage, abortSignal })
+        let utxos = await getUtxos({ publicKey: this.publicKey, connection: connection, encryptionService: this.encryptionService, storage, abortSignal, offset: this.utxosOffset })
         this.isRuning = false
         return getBalanceFromUtxos(utxos)
     }
@@ -252,7 +261,7 @@ export class PrivacyCash {
         logger.info('getting private balance')
         this.isRuning = true
         const connection = await this.getConnection();
-        let utxos = await getUtxosSPL({ publicKey: this.publicKey, connection: connection, encryptionService: this.encryptionService, storage, mintAddress: USDC_MINT })
+        let utxos = await getUtxosSPL({ publicKey: this.publicKey, connection: connection, encryptionService: this.encryptionService, storage, mintAddress: USDC_MINT, offset: this.utxosSplOffset })
         this.isRuning = false
         return getBalanceFromUtxosSPL(utxos)
     }
@@ -268,7 +277,8 @@ export class PrivacyCash {
             connection: connection,
             encryptionService: this.encryptionService,
             storage,
-            mintAddress
+            mintAddress,
+            offset: this.utxosSplOffset
         })
         this.isRuning = false
         return getBalanceFromUtxosSPL(utxos)
@@ -323,7 +333,8 @@ export class PrivacyCash {
             keyBasePath,
             storage,
             mintAddress,
-            signer
+            signer,
+            utxosSplOffset: this.utxosSplOffset
         })
         this.isRuning = false
         return res
@@ -355,7 +366,8 @@ export class PrivacyCash {
             keyBasePath,
             storage,
             mintAddress,
-            referrer
+            referrer,
+            utxosSplOffset: this.utxosSplOffset
         })
         logger.debug(`Withdraw successful. Recipient ${recipient} received ${base_units} USDC units`)
         this.isRuning = false
