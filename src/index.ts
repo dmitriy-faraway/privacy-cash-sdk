@@ -9,35 +9,58 @@ import { EncryptionService } from './utils/encryption.js';
 import { WasmFactory } from '@lightprotocol/hasher.rs';
 import bs58 from 'bs58'
 import { withdraw } from './withdraw.js';
-import { LocalStorage } from "node-localstorage";
-import path from 'node:path'
+// import { LocalStorage } from "node-localstorage";
+// import path from 'node:path'
 import { depositSPL } from './depositSPL.js';
 import { withdrawSPL } from './withdrawSPL.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 
-let storage = new LocalStorage(path.join(process.cwd(), "cache"));
+const storage = globalThis.localStorage;
+const keyBasePath = 'https://privacycash.org/circuit2';
 
 export class PrivacyCash {
-    private connection: Connection
     public publicKey: PublicKey
     private encryptionService: EncryptionService
-    private keypair: Keypair
+    private keypair: Keypair | null = null
     private isRuning?: boolean = false
     private status: string = ''
-    constructor({ RPC_url, owner, enableDebug }: {
-        RPC_url: string,
-        owner: string | number[] | Uint8Array | Keypair,
+    private getConnection: () => Promise<Connection>;
+    constructor({ RPC_url, owner, signature, enableDebug, getConnection, publicKey }: {
+        RPC_url?: string,
+        publicKey: PublicKey;
+        getConnection?: () => Promise<Connection>,
+        owner?: string | number[] | Uint8Array | Keypair,
+        signature?: Uint8Array,
         enableDebug?: boolean
     }) {
-        let keypair = getSolanaKeypair(owner)
-        if (!keypair) {
-            throw new Error('param "owner" is not a valid Private Key or Keypair')
+        this.publicKey = publicKey;
+        if (!owner && !signature) {
+            throw new Error('param "owner" or "signature" is required')
         }
-        this.keypair = keypair
-        this.connection = new Connection(RPC_url, 'confirmed')
-        this.publicKey = keypair.publicKey
+
+        if (owner) {
+            this.keypair = getSolanaKeypair(owner)
+        }
+
+        if (!getConnection && !RPC_url) {
+            throw new Error('param "getConnection" or "RPC_url" is required')
+        }
+
+        if (getConnection) {
+            this.getConnection = getConnection;
+        } else {
+            const connection = new Connection(RPC_url!, 'confirmed');
+            this.getConnection = () => Promise.resolve(connection);
+        }
+
         this.encryptionService = new EncryptionService();
-        this.encryptionService.deriveEncryptionKeyFromWallet(this.keypair);
+        if (this.keypair) {
+            this.publicKey = this.keypair.publicKey
+            this.encryptionService.deriveEncryptionKeyFromWallet(this.keypair);
+        } else {
+            this.encryptionService.deriveEncryptionKeyFromSignature(signature!);
+        }
+
         if (!enableDebug) {
             this.startStatusRender()
             this.setLogger((level, message) => {
@@ -86,24 +109,30 @@ export class PrivacyCash {
      * 
      * Lamports is the amount of SOL in lamports. e.g. if you want to deposit 0.01 SOL (10000000 lamports), call deposit({ lamports: 10000000 })
      */
-    async deposit({ lamports }: {
-        lamports: number
+    async deposit({ lamports, signer, signTransaction }: {
+        lamports: number,
+        signer?: PublicKey;
+        signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
     }) {
         this.isRuning = true
         logger.info('start depositting')
         let lightWasm = await WasmFactory.getInstance()
+        const connection = await this.getConnection();
+        const transactionSigner = signTransaction ? signTransaction : async (tx: VersionedTransaction) => {
+            tx.sign([this.keypair!])
+            return tx
+        }
+
         let res = await deposit({
             lightWasm,
             amount_in_lamports: lamports,
-            connection: this.connection,
+            connection: connection,
             encryptionService: this.encryptionService,
             publicKey: this.publicKey,
-            transactionSigner: async (tx: VersionedTransaction) => {
-                tx.sign([this.keypair])
-                return tx
-            },
-            keyBasePath: path.join(import.meta.dirname, '..', 'circuit2', 'transaction2'),
-            storage
+            transactionSigner,
+            keyBasePath,
+            storage,
+            signer,
         })
         this.isRuning = false
         return res
@@ -112,25 +141,30 @@ export class PrivacyCash {
     /**
     * Deposit USDC to the Privacy Cash.
     */
-    async depositUSDC({ base_units }: {
-        base_units: number
+    async depositUSDC({ base_units, signer, signTransaction }: {
+        base_units: number,
+        signer?: PublicKey,
+        signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
     }) {
         this.isRuning = true
         logger.info('start depositting')
         let lightWasm = await WasmFactory.getInstance()
+        const connection = await this.getConnection();
+        const transactionSigner = signTransaction ? signTransaction : async (tx: VersionedTransaction) => {
+            tx.sign([this.keypair!])
+            return tx
+        }
         let res = await depositSPL({
             mintAddress: USDC_MINT,
             lightWasm,
             base_units: base_units,
-            connection: this.connection,
+            connection: connection,
             encryptionService: this.encryptionService,
             publicKey: this.publicKey,
-            transactionSigner: async (tx: VersionedTransaction) => {
-                tx.sign([this.keypair])
-                return tx
-            },
-            keyBasePath: path.join(import.meta.dirname, '..', 'circuit2', 'transaction2'),
-            storage
+            transactionSigner,
+            keyBasePath,
+            storage,
+            signer
         })
         this.isRuning = false
         return res
@@ -150,14 +184,15 @@ export class PrivacyCash {
         logger.info('start withdrawing')
         let lightWasm = await WasmFactory.getInstance()
         let recipient = recipientAddress ? new PublicKey(recipientAddress) : this.publicKey
+        const connection = await this.getConnection();
         let res = await withdraw({
             lightWasm,
             amount_in_lamports: lamports,
-            connection: this.connection,
+            connection: connection,
             encryptionService: this.encryptionService,
             publicKey: this.publicKey,
             recipient,
-            keyBasePath: path.join(import.meta.dirname, '..', 'circuit2', 'transaction2'),
+            keyBasePath,
             storage,
             referrer
         })
@@ -180,15 +215,16 @@ export class PrivacyCash {
         logger.info('start withdrawing')
         let lightWasm = await WasmFactory.getInstance()
         let recipient = recipientAddress ? new PublicKey(recipientAddress) : this.publicKey
+        const connection = await this.getConnection();
         let res = await withdrawSPL({
             mintAddress: USDC_MINT,
             lightWasm,
             base_units,
-            connection: this.connection,
+            connection: connection,
             encryptionService: this.encryptionService,
             publicKey: this.publicKey,
             recipient,
-            keyBasePath: path.join(import.meta.dirname, '..', 'circuit2', 'transaction2'),
+            keyBasePath,
             storage,
             referrer
         })
@@ -203,7 +239,8 @@ export class PrivacyCash {
     async getPrivateBalance(abortSignal?: AbortSignal) {
         logger.info('getting private balance')
         this.isRuning = true
-        let utxos = await getUtxos({ publicKey: this.publicKey, connection: this.connection, encryptionService: this.encryptionService, storage, abortSignal })
+        const connection = await this.getConnection();
+        let utxos = await getUtxos({ publicKey: this.publicKey, connection: connection, encryptionService: this.encryptionService, storage, abortSignal })
         this.isRuning = false
         return getBalanceFromUtxos(utxos)
     }
@@ -214,7 +251,8 @@ export class PrivacyCash {
     async getPrivateBalanceUSDC() {
         logger.info('getting private balance')
         this.isRuning = true
-        let utxos = await getUtxosSPL({ publicKey: this.publicKey, connection: this.connection, encryptionService: this.encryptionService, storage, mintAddress: USDC_MINT })
+        const connection = await this.getConnection();
+        let utxos = await getUtxosSPL({ publicKey: this.publicKey, connection: connection, encryptionService: this.encryptionService, storage, mintAddress: USDC_MINT })
         this.isRuning = false
         return getBalanceFromUtxosSPL(utxos)
     }
@@ -224,9 +262,10 @@ export class PrivacyCash {
     */
     async getPrivateBalanceSpl(mintAddress: PublicKey | string) {
         this.isRuning = true
+        const connection = await this.getConnection();
         let utxos = await getUtxosSPL({
             publicKey: this.publicKey,
-            connection: this.connection,
+            connection: connection,
             encryptionService: this.encryptionService,
             storage,
             mintAddress
@@ -258,28 +297,33 @@ export class PrivacyCash {
     /**
    * Deposit SPL to the Privacy Cash.
    */
-    async depositSPL({ base_units, mintAddress, amount }: {
+    async depositSPL({ base_units, mintAddress, amount, signer, signTransaction }: {
         base_units?: number,
         amount?: number,
-        mintAddress: PublicKey | string
+        mintAddress: PublicKey | string,
+        signer?: PublicKey,
+        signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
     }) {
         this.isRuning = true
         logger.info('start depositting')
         let lightWasm = await WasmFactory.getInstance()
+        const connection = await this.getConnection();
+        const transactionSigner = signTransaction ? signTransaction : async (tx: VersionedTransaction) => {
+            tx.sign([this.keypair!])
+            return tx
+        }
         let res = await depositSPL({
             lightWasm,
             base_units,
             amount,
-            connection: this.connection,
+            connection: connection,
             encryptionService: this.encryptionService,
             publicKey: this.publicKey,
-            transactionSigner: async (tx: VersionedTransaction) => {
-                tx.sign([this.keypair])
-                return tx
-            },
-            keyBasePath: path.join(import.meta.dirname, '..', 'circuit2', 'transaction2'),
+            transactionSigner,
+            keyBasePath,
             storage,
-            mintAddress
+            mintAddress,
+            signer
         })
         this.isRuning = false
         return res
@@ -299,16 +343,16 @@ export class PrivacyCash {
         logger.info('start withdrawing')
         let lightWasm = await WasmFactory.getInstance()
         let recipient = recipientAddress ? new PublicKey(recipientAddress) : this.publicKey
-
+        const connection = await this.getConnection();
         let res = await withdrawSPL({
             lightWasm,
             base_units,
             amount,
-            connection: this.connection,
+            connection: connection,
             encryptionService: this.encryptionService,
             publicKey: this.publicKey,
             recipient,
-            keyBasePath: path.join(import.meta.dirname, '..', 'circuit2', 'transaction2'),
+            keyBasePath,
             storage,
             mintAddress,
             referrer
