@@ -61,10 +61,11 @@ type DepositParams = {
     encryptionService: EncryptionService,
     keyBasePath: string,
     lightWasm: hasher.LightWasm,
+    payerKey?: PublicKey,
     referrer?: string,
     transactionSigner: (tx: VersionedTransaction) => Promise<VersionedTransaction>
 }
-export async function deposit({ lightWasm, storage, keyBasePath, publicKey, connection, amount_in_lamports, encryptionService, transactionSigner, referrer }: DepositParams) {
+export async function deposit({ lightWasm, storage, keyBasePath, publicKey, connection, amount_in_lamports, encryptionService, transactionSigner, referrer, payerKey = publicKey }: DepositParams) {
     // check limit
     let limitAmount = await checkDepositLimit(connection)
 
@@ -390,7 +391,7 @@ export async function deposit({ lightWasm, storage, keyBasePath, publicKey, conn
     const recentBlockhash = await connection.getLatestBlockhash();
 
     const messageV0 = new TransactionMessage({
-        payerKey: publicKey, // User pays for their own deposit
+        payerKey,
         recentBlockhash: recentBlockhash.blockhash,
         instructions: [modifyComputeUnits, depositInstruction],
     }).compileToV0Message([lookupTableAccount.value]);

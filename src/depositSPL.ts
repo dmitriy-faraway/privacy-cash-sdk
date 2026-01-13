@@ -76,10 +76,11 @@ type DepositParams = {
     encryptionService: EncryptionService,
     keyBasePath: string,
     lightWasm: hasher.LightWasm,
+    payerKey?: PublicKey,
     referrer?: string,
-    transactionSigner: (tx: VersionedTransaction) => Promise<VersionedTransaction>
+    transactionSigner: (tx: VersionedTransaction) => Promise<VersionedTransaction>,
 }
-export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, connection, base_units, amount, encryptionService, transactionSigner, referrer, mintAddress }: DepositParams) {
+export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, payerKey = publicKey, connection, base_units, amount, encryptionService, transactionSigner, referrer, mintAddress }: DepositParams) {
     if (typeof mintAddress == 'string') {
         mintAddress = new PublicKey(mintAddress)
     }
@@ -475,7 +476,7 @@ export async function depositSPL({ lightWasm, storage, keyBasePath, publicKey, c
     const recentBlockhash = await connection.getLatestBlockhash();
 
     const messageV0 = new TransactionMessage({
-        payerKey: publicKey, // User pays for their own deposit
+        payerKey,
         recentBlockhash: recentBlockhash.blockhash,
         instructions: [modifyComputeUnits, depositInstruction],
     }).compileToV0Message([lookupTableAccount.value]);
