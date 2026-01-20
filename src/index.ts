@@ -16,7 +16,7 @@ import { withdrawSPL } from './withdrawSPL.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 
 const storage = globalThis.localStorage;
-const keyBasePath = 'https://privacycash.org/circuit2';
+const keyBasePath = 'https://www.privacycash.org/circuit2';
 
 export class PrivacyCash {
     public publicKey: PublicKey
