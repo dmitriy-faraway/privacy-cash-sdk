@@ -1,5 +1,5 @@
 ## Privacy Cash Extended
-Based on privacycash@1.1.9
+Based on privacycash@1.1.11
 
 ## Privacy Cash SDK
 This is the SDK for Privacy Cash. It has been audited by Zigtur (https://x.com/zigtur).
@@ -18,7 +18,19 @@ deposit(), withdraw(), getPrivateBalance()
 b. for SPL (currently supporting USDC and USDT): 
 depositSPL(), withdrawSPL(), getPrivateBalanceSpl()
 
-Check the example project under /example folder. The code should be fairly self-explanatory.
+For backend integration:  
+Check the example project under /example folder. The code should be fairly self-explanatory.  
+
+For frontend integration:  
+Check the example project above, but also refer to: https://gist.github.com/SocialfiPanda/c63786b5dd156e59847e9a4afca31a77
+
+Common Issues:  
+Next.js project needs to update the postinstall build scripts:  
+```
+"scripts": {
+    "postinstall": "cp node_modules/@lightprotocol/hasher.rs/dist/hasher_wasm_simd_bg.wasm node_modules/@lightprotocol/hasher.rs/dist/browser-fat/es/ && cp node_modules/@lightprotocol/hasher.rs/dist/light_wasm_hasher_bg.wasm node_modules/@lightprotocol/hasher.rs/dist/browser-fat/es/",
+},..}
+```
 
 Use node version 24 or above.
 

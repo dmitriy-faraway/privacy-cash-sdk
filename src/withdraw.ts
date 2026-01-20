@@ -58,8 +58,8 @@ type WithdrawParams = {
 }
 
 export async function withdraw({ recipient, lightWasm, storage, publicKey, connection, amount_in_lamports, encryptionService, keyBasePath, referrer, utxosOffset }: WithdrawParams) {
-    let fee_in_lamports = amount_in_lamports * (await getConfig('withdraw_fee_rate')) + LAMPORTS_PER_SOL * (await getConfig('withdraw_rent_fee'))
-    amount_in_lamports -= fee_in_lamports
+    let fee_in_lamports = Math.floor(amount_in_lamports * (await getConfig('withdraw_fee_rate')) + LAMPORTS_PER_SOL * (await getConfig('withdraw_rent_fee')))
+    amount_in_lamports = Math.floor(amount_in_lamports - fee_in_lamports)
     let isPartial = false
 
     logger.debug('Encryption key generated from user keypair');
@@ -320,7 +320,7 @@ export async function withdraw({ recipient, lightWasm, storage, publicKey, conne
         logger.info('Confirming transaction..')
         logger.debug(`retryTimes: ${retryTimes}`)
         await new Promise(resolve => setTimeout(resolve, itv * 1000));
-        logger.info('Fetching updated tree state...');
+        logger.info('Fetching updated onchain state...');
         let res = await fetch(RELAYER_API_URL + '/utxos/check/' + encryptedOutputStr)
         let resJson = await res.json()
         logger.debug('resJson:', resJson)

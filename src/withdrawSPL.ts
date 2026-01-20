@@ -87,7 +87,7 @@ export async function withdrawSPL({ recipient, lightWasm, storage, publicKey, co
         throw new Error('can not find token_rent_fee for ' + token.name)
     }
     let fee_base_units = Math.floor(base_units * withdraw_fee_rate + units_per_token * token_rent_fee)
-    base_units -= fee_base_units
+    base_units = Math.floor(base_units - fee_base_units)
 
     if (base_units <= 0) {
         throw new Error('withdraw amount too low, at least ' + fee_base_units / token_rent_fee)
@@ -384,7 +384,7 @@ export async function withdrawSPL({ recipient, lightWasm, storage, publicKey, co
         logger.info('Confirming transaction..')
         logger.debug(`retryTimes: ${retryTimes}`)
         await new Promise(resolve => setTimeout(resolve, itv * 1000));
-        logger.info('Fetching updated tree state...');
+        logger.info('Fetching updated onchain state...');
         let res = await fetch(RELAYER_API_URL + '/utxos/check/' + encryptedOutputStr + '?token=' + token.name)
         let resJson = await res.json()
         logger.debug('resJson:', resJson)
