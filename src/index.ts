@@ -3,7 +3,7 @@ import { deposit } from './deposit.js';
 import { getBalanceFromUtxos, getUtxos, localstorageKey } from './getUtxos.js';
 import { getBalanceFromUtxosSPL, getUtxosSPL } from './getUtxosSPL.js';
 
-import { LSK_ENCRYPTED_OUTPUTS, LSK_FETCH_OFFSET, SplList, TokenList, tokens, USDC_MINT } from './utils/constants.js';
+import { LSK_ENCRYPTED_OUTPUTS, LSK_FETCH_OFFSET, RELAYER_API_URL, SplList, TokenList, tokens, USDC_MINT } from './utils/constants.js';
 import { logger, type LoggerFn, setLogger } from './utils/logger.js';
 import { EncryptionService } from './utils/encryption.js';
 import { WasmFactory } from '@lightprotocol/hasher.rs';
@@ -374,7 +374,39 @@ export class PrivacyCash {
         return res
     }
 
+    async checkAvailability(): Promise<boolean> {
+        // Check resources availability
+        const resources: Map<string, { statusCode: number, contentType: string }> = new Map();
+        resources.set(`${keyBasePath}.zkey`, { statusCode: 200, contentType: 'application/octet-stream' });
+        resources.set(`${keyBasePath}.wasm`, { statusCode: 200, contentType: 'application/wasm' });
+        resources.set(RELAYER_API_URL, { statusCode: 200, contentType: 'application/json' });
 
+        const res = await Promise.all(Array.from(resources.keys()).map(async url => {
+            const rules = resources.get(url);
+            if (!rules) {
+                throw new Error(`Resource ${url} not found`);
+            }
+            logger.info(`Checking availability of ${url}`);
+            const res = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+            logger.info(`Availability of ${url}: Code: ${res.status}`);
+
+            if (!res.headers.get('Content-Type')?.startsWith(rules.contentType)) {
+                throw new Error(`Resource ${url} has wrong content type - ${res.headers.get('Content-Type')}`);
+            }
+
+            if (res.status !== rules.statusCode) {
+                throw new Error(`Resource ${url} has wrong status code - ${res.status}`);
+            }
+
+            return res;
+        }));
+
+        if (res.every(res => res.ok)) {
+            return true;
+        }
+
+        throw new Error('Resources not available');
+    }
 }
 
 function getSolanaKeypair(
